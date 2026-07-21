@@ -150,7 +150,7 @@
 - 新增 `validator.Target` 类型和 `ValidatorConfig.Targets` 列表
 - 每次验证从目标列表随机选择，确保代理能访问不同域名
 - 向后兼容：`Targets` 为空时 fallback 到 `TargetHost`/`TargetPort`
-- 默认目标：`api.literouter.com:443`、`httpbin.org:443`、`example.com:443`
+- 默认目标：`www.xxx.com:443`、`httpbin.org:443`、`example.com:443`
 - `config.jsonc` 新增 `targets` 配置项
 
 ## 2026-07-04 — v7: P2 兼容性增强（5 项）

@@ -308,10 +308,10 @@ func defaults() *Config {
 			CheckIntervalIdle:    "5m",
 		},
 		Validator: ValidatorConfig{
-			TargetHost: "api.literouter.com",
+			TargetHost: "www.xxx.com",
 			TargetPort: 443,
 			Targets: []TargetConfig{
-				{Host: "api.literouter.com", Port: 443},
+				{Host: "www.xxx.com", Port: 443},
 				{Host: "httpbin.org", Port: 443},
 				{Host: "example.com", Port: 443},
 			},

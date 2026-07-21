@@ -17,7 +17,7 @@ TIMEOUT = 10
 TARGETS = [
     ("www.baidu.com", 443, "Baidu (CN)"),
     ("www.qq.com", 443, "Tencent (CN)"),
-    ("api.literouter.com", 443, "Literouter (target)"),
+    ("www.xxx.com", 443, "Literouter (target)"),
     ("httpbin.org", 443, "httpbin (US)"),
 ]
 

@@ -251,7 +251,7 @@ func TestStatsCollectProductWindowsIncludeAndExcludeBoundedBuckets_whenIdle(t *t
 
 func TestStatsRecentRequestsIncludeTimestampAndTime_whenRecorded(t *testing.T) {
 	s := newTestServer(t)
-	s.stats.recordRequest("api.literouter.com:443", "203.0.113.10:1080", 42, true)
+	s.stats.recordRequest("www.xxx.com:443", "203.0.113.10:1080", 42, true)
 
 	// When
 	var body struct {

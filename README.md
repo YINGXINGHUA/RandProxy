@@ -53,10 +53,10 @@ go build -o randproxy .
 # HTTP CONNECT
 export http_proxy=http://127.0.0.1:8080
 export https_proxy=http://127.0.0.1:8080
-curl https://api.literouter.com/
+curl https://www.xxx.com/
 
 # SOCKS5
-curl --proxy socks5://127.0.0.1:8080 https://api.literouter.com/
+curl --proxy socks5://127.0.0.1:8080 https://www.xxx.com/
 ```
 
 ## 配置
@@ -102,7 +102,7 @@ curl --proxy socks5://127.0.0.1:8080 https://api.literouter.com/
   "validator": {
     "timeout": "10s",
     "concurrency": 4,
-    "targets": [{ "host": "api.literouter.com", "port": 443 }]
+    "targets": [{ "host": "www.xxx.com", "port": 443 }]
   },
   "health": {
     "latency_threshold": "3000ms",

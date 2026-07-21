@@ -203,7 +203,7 @@
     "targets": [
       { "host": "www.google.com", "port": 443 }
       // 可选备用目标，按需取消注释。注意数组逗号位置。
-      // ,{ "host": "api.literouter.com", "port": 443 }
+      // ,{ "host": "www.xxx.com", "port": 443 }
       // ,{ "host": "httpbin.org", "port": 443 }
       // ,{ "host": "example.com", "port": 443 }
     ],
@@ -211,7 +211,7 @@
     // 单一验证目标（当 targets 为空时使用）。
     // 代理必须能通过 SOCKS5 隧道 + TLS 握手成功访问此域名。
     "target_host": "www.google.com",
-    // "target_host": "api.literouter.com",
+    // "target_host": "www.xxx.com",
     // "target_host": "ai-router.dev",
 
     // 目标端口（HTTPS 一般为 443）。

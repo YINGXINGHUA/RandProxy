@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultTarget  = "api.literouter.com"
+	defaultTarget  = "www.xxx.com"
 	defaultPort    = 443
 	defaultTimeout = 6 * time.Second
 	defaultWorkers = 5

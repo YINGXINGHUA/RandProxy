@@ -6,7 +6,7 @@
 ## Context
 
 RandProxy needs to forward HTTPS requests from Downstream clients to the Target
-(`api.literouter.com:443`). The forwarding goes through a pool of free proxies
+(`www.xxx.com:443`). The forwarding goes through a pool of free proxies
 fetched from public sources. The proxy server exposes an HTTP CONNECT
 interface for Downstream clients (curl, browsers, etc.).
 
@@ -65,4 +65,4 @@ endpoint.
 
 ### Direct connection (no upstream proxy, rejected)
 Does not solve the original problem — the 30-request-per-IP limit on
-`api.literouter.com` requires IP rotation through proxies.
+`www.xxx.com` requires IP rotation through proxies.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Probe v2: fetch proxies, test HTTP + HTTPS (CONNECT) forwarding.
-Target service: https://api.literouter.com (HTTPS)
+Target service: https://www.xxx.com (HTTPS)
 Zero dependencies.
 """
 
