@@ -1,0 +1,264 @@
+// RandProxy 配置文件 (.jsonc)
+//
+// 复制此文件并根据需要修改。支持 // 和 /* */ 注释（标准 .jsonc 格式）。
+//
+// 使用方式：
+//   ./randproxy                     # 使用当前目录的 config.jsonc
+//   ./randproxy --config /path/to/file.jsonc  # 指定配置文件路径
+
+{
+  // --- 服务端 ---
+  // 代理服务器接收下游 HTTP CONNECT / HTTP 正向代理 / SOCKS5 请求，
+  // 再通过已验证的上游 SOCKS5 代理转发到目标站点。
+  "server": {
+    // 监听地址。0.0.0.0 = 所有网络接口（其他机器可以连接）。
+    // localhost = 仅本机访问（更安全）。
+    // 如果只给本机程序使用，可改为 "127.0.0.1"。
+    // "host": "127.0.0.1",
+    "host": "0.0.0.0",
+
+    // 代理监听端口。HTTP CONNECT / HTTP 正向代理 / SOCKS5 走这个端口。
+    "port": 8080,
+
+    // Web 操作台监听地址。可设为 127.0.0.1、0.0.0.0 或指定网卡 IP。
+    // 绑定到 0.0.0.0 时，远程客户端可打开页面；配置/来源/代理池写操作
+    // 是否允许局域网客户端提交，取决于下方 control_plane.trusted_local_only。
+    // 留空时复用 host。
+    // "web_host": "0.0.0.0",
+    // "web_host": "192.168.1.216",
+    "web_host": "127.0.0.1",
+
+    // Web 控制面板监听端口。
+    // 必须和代理端口不同；设为 0 可禁用独立 Web 监听。
+    // "web_port": 0,
+    "web_port": 8081,
+
+    // 中继空闲超时。当代理隧道建立后，如果双方长时间无数据流动，
+    // 超过此时间自动断开连接，防止僵尸连接占资源。
+    // 流式场景（SSE / WebSocket / 长轮询）如果数据间隔较大，需调大。
+    // 格式：Go 持续时间字符串（如 "60s"、"5m"、"30m"）。
+    // 设为 "0s" 或 "" 禁用超时（不限制）。
+    // "relay_idle_timeout": "5m",
+    "relay_idle_timeout": "60s",
+
+    // 代理端口最大并发下游连接数。超过后 HTTP 返回 503，SOCKS5 返回拒绝，
+    // 避免系统资源被无限连接耗尽。PC/局域网压测可调到 500-1000。
+    // 范围：1-10000。
+    // "max_connections": 500,
+    "max_connections": 500
+  },
+
+  // --- 代理池 ---
+  // 管理 SOCKS5 代理的生命周期：
+  //   缓冲区（未验证）→ 就绪池（已验证）→ 黑名单（已用满）
+  "pool": {
+    // 就绪代理低水位。低于此值时系统会持续补充候选。
+    // 对免费代理池，10 是较稳妥的最低可用线；如果请求量较大，可调到 20。
+    // "min_ready": 20,
+    "min_ready": 10,
+
+    // 就绪池最大保留数。验证器会尽量把就绪池填到此上限。
+    // 值越大，可用储备越厚；也会占用更多验证和健康检查成本。
+    // "max_ready": 80,
+    "max_ready": 40,
+
+    // 待验证队列最大长度。缓存超过此值时停止拉取新代理。
+    // 拉取器会在队列降至一半以下时自动补充。
+    // 免费代理源质量波动大，建议给验证器留足候选储备。
+    // "buffer_max": 1000,
+    "buffer_max": 500,
+
+    // 每个代理 IP 在被拉黑前最多使用次数。
+    // 达到此次数后，代理进入黑名单，等待 blacklist_ttl 后释放。
+    // 若目标站点风控严格，可降低到 5-10，让 IP 更快轮换。
+    // "max_use": 10,
+    "max_use": 25,
+
+    // 黑名单代理的隔离时长，到期后自动释放回就绪池。
+    // 格式：Go 持续时间字符串（如 "24h"、"1h30m"、"30m"）。
+    // 真实请求失败的免费代理通常短时间内不会恢复，24h 比较保守。
+    // "blacklist_ttl": "6h",
+    "blacklist_ttl": "24h",
+
+    // 状态持久化文件。程序退出时保存就绪池，下次启动自动恢复。
+    // 设为 "" 禁用持久化（每次重启从头验证）。
+    // 如果刚调整验证策略或怀疑旧池质量差，可临时删除该文件后启动。
+    // "state_file": "/tmp/pool_state.json",
+    "state_file": "pool_state.json"
+    // "state_file": ""
+  },
+
+  // --- 路由策略 ---
+  // 请求期上游选择仅支持 4 种模式：
+  //   balanced / random_subset / stable_subset / single_best
+  // `policy.*` 的变更可由控制台实时生效。
+  "policy": {
+    // 默认模式，按排序与来源轮转选择可用代理，适合长期运行。
+    // 可选：
+    //   balanced      — 推荐，兼顾评分和来源轮转
+    //   random_subset — 从前 N 个较好代理中随机选，降低固定模式
+    //   stable_subset — 在前 N 个较好代理中稳定轮换，适合较稳定小池
+    //   single_best   — 总是选当前最佳，容易集中消耗，不建议免费代理池长期使用
+    // "mode": "random_subset",
+    // "mode": "stable_subset",
+    // "mode": "single_best",
+    "mode": "balanced",
+
+    // `random_subset` 模式使用排序后前 N 个可用代理做随机选择。
+    // 值不能小于 1；通常 3-10 都可以。
+    // "random_subset_size": 8,
+    "random_subset_size": 3,
+
+    // `stable_subset` 模式在排序后前 N 个可用代理内做稳定子集选择。
+    // 值不能小于 1；越大越分散，越小越稳定。
+    // "stable_subset_size": 8,
+    "stable_subset_size": 3
+  },
+
+  // --- 控制面 ---
+  // 人工维护的 base config 仍是本文件。
+  // Web 控制台写入同目录 sidecar `config.override.json`，
+  // 启动时按 base + override 合并；apply 顺序固定为先持久化，再热应用。
+  // 可热应用：`policy.*`、`pool.max_use`、`pool.blacklist_ttl`、`sources.enabled.*`
+  // 需重启：`server.*`、`validator.*`、`health.*`、`log.*`、`pool.min_ready`、
+  // `pool.max_ready`、`pool.buffer_max`、`pool.state_file`
+  "control_plane": {
+    // true 时，/api/v1/* 变更接口只接受 loopback 客户端，且 Host 必须是
+    // localhost 或 loopback IP（默认，更安全）。远程设备仍可访问只读页面。
+    // false 时，局域网客户端也可提交配置/来源/代理池变更；仍要求
+    // X-RandProxy-Control: 1、Host 为 IP 字面量，并拒绝跨站浏览器请求。
+    // 仅在可信内网使用。
+    // "trusted_local_only": false,
+    "trusted_local_only": true
+  },
+
+  // --- Source 开关持久化 ---
+  // key 必须是 provider 名称。空对象表示全部沿用默认启用状态。
+  // 缺失的 provider key 默认启用；写 false 表示停止后续抓取。
+  // UI/API 切换 source 后，机器只会把差异写入 config.override.json。
+  "sources": {
+    "enabled": {
+      // 当前注册的 provider 名称如下；按需取消注释并改 true/false。
+      // 频繁 429 / 502 / timeout 的源可以先设为 false，避免污染候选池。
+      // "66daili": false,
+      // "proxyscrape": true,
+      // "proxifly": true,
+      // "hproxy": true,
+      // "thordata": true,
+      // "scdn-socks5": false,
+      // "goodips": true,
+      // "43.135.31.113": false,
+      // "geonode": true
+    }
+  },
+
+  // --- 健康检查 ---
+  // 定期检查就绪池中的代理质量，自动踢出劣质代理。
+  // 采用 EWMA（指数加权移动平均）+ 方差评分，快速响应质量变化。
+  "health": {
+    // 全池重验周期。超过此时长未验证的代理会被重新测试。
+    // 设为 "" 或 "0s" 禁用全池重验。
+    // "revalidate_interval": "30m",
+    "revalidate_interval": "1h",
+
+    // 每次检查前几个待用代理（即将分配给用户的）。
+    // 请求量高时可调大；值越大健康检查成本越高。
+    // "front_check_count": 8,
+    "front_check_count": 4,
+
+    // EWMA 延迟阈值。代理的加权平均延迟超过此值则释放。
+    // 免费代理延迟较大，过低会误杀；过高会保留慢代理。
+    // "latency_threshold": "3000ms",
+    "latency_threshold": "6000ms",
+
+    // EWMA 平滑系数。0-1 之间：
+    //   越大对近期延迟变化越敏感（0.3 = 中等敏感，0.5 = 非常敏感）
+    // "ewma_alpha": 0.5,
+    "ewma_alpha": 0.3,
+
+    // 连续失败上限。代理连续建连失败达到此数时立即释放。
+    // 免费代理建议 1：真实请求失败一次就踢，减少用户替系统试错。
+    // 稳定私有代理可调回 2-3。
+    // "consecutive_fail_limit": 3,
+    "consecutive_fail_limit": 1,
+
+    // 活跃时的检查间隔（有请求时）。
+    // "check_interval_active": "30s",
+    "check_interval_active": "60s",
+
+    // 空闲时的检查间隔（无请求超过 idle 窗口时）。
+    // "check_interval_idle": "5m",
+    "check_interval_idle": "10m"
+  },
+
+  // --- 验证器 ---
+  // 验证原始 SOCKS5 代理，通过测试后才能进入就绪池。
+  // 当前验证仍是 TCP/TLS/HTTP 路径；UDP ASSOCIATE 能力由运行时按需使用。
+  "validator": {
+    // 验证目标列表。每次验证随机选择一个目标。
+    // 使用体验原则：验证目标应尽量接近你的真实访问目标。
+    // 如果主要访问 Google，就保留 www.google.com；如果主要访问 API 服务，
+    // 就把目标改成对应域名。目标越分散，ready 池越通用，但验证更慢。
+    // 如果 targets 为空，使用 target_host/target_port 作为单一目标。
+    "targets": [
+      { "host": "www.google.com", "port": 443 }
+      // 可选备用目标，按需取消注释。注意数组逗号位置。
+      // ,{ "host": "api.literouter.com", "port": 443 }
+      // ,{ "host": "httpbin.org", "port": 443 }
+      // ,{ "host": "example.com", "port": 443 }
+    ],
+
+    // 单一验证目标（当 targets 为空时使用）。
+    // 代理必须能通过 SOCKS5 隧道 + TLS 握手成功访问此域名。
+    "target_host": "www.google.com",
+    // "target_host": "api.literouter.com",
+    // "target_host": "ai-router.dev",
+
+    // 目标端口（HTTPS 一般为 443）。
+    "target_port": 443,
+
+    // 每个代理的测试超时时间。超过此时间未响应则丢弃。
+    // 时间越短验证越快，但可能丢弃慢速但可用的代理。
+    // 免费代理池建议 5-8s，避免大量坏代理拖慢验证吞吐。
+    // "timeout": "10s",
+    "timeout": "6s",
+
+    // 并行验证协程数。越大验证越快，但网络并发也越高。
+    // 真实免费代理源通过率低，建议 16-32；机器/网络较弱可降到 8。
+    // "concurrency": 8,
+    // "concurrency": 32,
+    "concurrency": 24,
+
+    // TLS 证书验证。false=严格验证；true=跳过证书链验证。
+    // 当前验证只用于判断代理是否能完成 TLS/HTTP 路径，不承载业务数据。
+    // 若你的验证目标证书稳定可靠，可改为 false 更严格。
+    // "tls_insecure": false,
+    "tls_insecure": false
+  },
+
+  // --- 日志 ---
+  "log": {
+    // 每条日志行的前缀。
+    "prefix": "[randproxy]",
+
+    // 日志详细级别。可选值：
+    //   debug   — 全部输出
+    //   info    — 常规运行日志（默认）
+    //   warn    — 仅警告和错误
+    //   error   — 仅错误
+    //   silent  — 不输出任何日志
+    // 调试 provider/validator 时临时改为 debug；长期运行建议 info 或 warn。
+    // "level": "debug",
+    // "level": "warn",
+    "level": "info",
+
+    // 日志文件路径。设为 "" 或 file_enable 为 false 时不写文件。
+    // 长期运行建议放在 /tmp 之外，并配合 logrotate。
+    // "file": "/var/log/randproxy.log",
+    "file": "randproxy.log",
+
+    // 是否启用日志文件输出。设为 true 时将日志同时写入文件。
+    // "file_enable": true,
+    "file_enable": true
+  }
+}

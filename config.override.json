@@ -1,0 +1,13 @@
+{
+  "policy": {
+    "mode": "random_subset"
+  },
+  "sources": {
+    "enabled": {
+      "43.135.31.113": false,
+      "66daili": false,
+      "geonode": true,
+      "goodips": true
+    }
+  }
+}

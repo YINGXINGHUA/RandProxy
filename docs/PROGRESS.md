@@ -1,0 +1,119 @@
+# Progress
+Last updated: 2026-07-07 | Last verified: 2026-07-07
+
+## Active
+*(None — final acceptance review passed and documented)*
+
+## Recently Completed
+- **multi-round stress verification and connection-limit tuning**:
+  - `scripts/stress-runtime.go` now supports `-rounds`, `-pause`, `-upstreams`, `-settle`, and `-output`, and emits per-round anomaly summaries with failure classification, peak connection/lease gauges, final gauge checks, goroutines, and memory allocation
+  - Proxy overload handling now returns protocol-aware failures instead of bare connection resets: HTTP receives 503 and SOCKS5 receives no acceptable methods
+  - `server.max_connections` configures the proxy listener concurrency cap; the stress harness raises it for high-concurrency local validation
+  - Final local stress evidence passed: 192 concurrency, 3 rounds, 20s each, 12 mock upstreams, 370,734 total requests, 0 failures, 0 anomalies, active connections/leases returned to 0
+- **root project README**:
+  - Added `README.md` as the project entry point covering purpose, architecture, quick start, configuration, Web control plane, provider keys, dashboard build workflow, verification, troubleshooting, and documentation map
+- **configuration usability pass**:
+  - `config.jsonc` now includes commented examples for disabled/alternate server binding, Web listener, routing modes, source toggles, health tuning, validation targets, validator concurrency, TLS strictness, and log-file output
+  - Free-proxy operating defaults were tuned for real use: larger `buffer_max`, faster validator timeout, higher validator concurrency, and fail-fast request eviction through `consecutive_fail_limit=1`
+  - A repository config load test verifies the shipped `config.jsonc` remains parseable and internally valid
+- **request-time bad upstream lifecycle fix**:
+  - Request-time dial/read failures now demote recently failed ready proxies in allocator ordering, including fresh unmeasured proxies
+  - A failed pinned best proxy is cleared immediately so the next request can try another candidate instead of repeatedly hitting the same bad upstream
+  - Successful requests reset `ConsecutiveFails`, restoring true consecutive-failure semantics
+  - Blacklisted proxies remain in `known` during cooldown and blacklist insertion is idempotent, preventing provider re-feed or duplicate blacklist entries for the same IP:port
+  - Validator refill now continues until the ready pool reaches `max_ready`, giving real traffic a larger ready reservoir instead of stopping around `min_ready`
+- **LAN control-plane mutation mode**:
+  - `control_plane.trusted_local_only=false` is now honored instead of being normalized back to true
+  - When disabled, LAN clients may submit config/source/pool mutations if they can reach the Web listener, use an IP-literal Host, and send `X-RandProxy-Control: 1`; cross-site browser signals are still rejected
+- **web listener binding fix**:
+  - `server.web_host` is now respected when `server.web_port` is enabled, including `0.0.0.0` and specific interface IPs
+  - `control_plane.trusted_local_only=true` remains the default: remote clients may load the Web surface when bound publicly, but config/source/pool writes require loopback RemoteAddr plus localhost/loopback-IP Host unless LAN mode is explicitly enabled
+- **provider maintenance guide**:
+  - Added `docs/PROVIDERS.md` describing the `proxy.Provider` interface, one-file provider pattern, `ListProvider` shortcut, registration in `main.go`, `sources.enabled` runtime toggles, removal workflow, verification commands, and long-running provider rules
+- **final project acceptance review**:
+  - Five-lane final review completed: goal/constraint verification PASS, hands-on QA PASS, code quality PASS after blocker fix, security PASS after blocker fix, context mining PASS
+  - QA found and fixed an overview response regression where `sources` could be `null` with no providers; `/api/v1/overview` now emits an empty array so the dashboard does not throw while iterating sources
+  - Code-quality blocker fixed: `/api/v1/pool` response DTOs and `active_leases` composition live in `internal/server`; `internal/pool` inventory snapshot remains a pure pool-domain snapshot without HTTP JSON tags or allocator-owned active lease fields
+  - Security blocker fixed: control-plane mutation endpoints reject cross-site browser signals and require `X-RandProxy-Control: 1`; loopback RemoteAddr is required in the default trusted-local mode, while explicit LAN mode requires an IP-literal Host
+  - Post-fix verification passed: `go test ./...`, `npm --prefix ui run build`, `./build-dashboard.sh`, and 10s / 12-concurrency stress run with 26,987 requests and zero failures
+- **runtime stability and traffic stress verification**:
+  - Added `scripts/stress-runtime.go`, an isolated reproducible harness that starts RandProxy with a local mock SOCKS5 upstream, local HTTP target, trusted-local control plane, random loopback ports, and bounded stress settings
+  - Harness covers HTTP forward proxy, HTTP CONNECT, SOCKS5 CONNECT, `/api/v1/overview`, and `/api/v1/pool` in one run without depending on external free proxy quality
+  - 60s / 24-concurrency run completed 309,086 proxied requests with zero failures: 106,071 HTTP forward, 106,389 HTTP CONNECT, 96,626 SOCKS5 CONNECT
+  - Runtime gauges were observable during load (`peak_connections=42`, `peak_leases=26`) and returned to zero after completion; `/api/v1/overview` and `/api/v1/pool` returned 200 after the run
+  - Evidence files: `.omo/evidence/stress-runtime-60s.json`, `.omo/evidence/stress-runtime-60s.log`, `.omo/evidence/stress-runtime-peak.json`
+- **v10 trusted-local operations console + control plane**:
+  - Web 面板继续与代理监听拆分；`server.web_host` / `server.web_port` 控制实际监听地址，写操作仍由 trusted-local mutation guard 限制
+  - 操作台 UI 已重构为中文浅色分层控制台：侧栏模块导航覆盖“总览 / 代理池 / 来源 / 策略 / 配置 / 事件”，避免所有信息堆在一个长页面
+  - 顶部工作区工具条压缩为单行，包含回执摘要、刷新、刷新间隔、时间范围（近30分钟 / 24小时 / 3天）与更新时间
+  - 兼容路由继续保留 `/`、`/dashboard`、`/stats`，同时提供 trusted-local `/api/v1/overview`、`/api/v1/config`、`/api/v1/pool`、`/api/v1/pool/proxies/:id/{blacklist|revalidate|release}`、`/api/v1/sources/:name/{enable|disable}`
+  - `config.jsonc` 继续由人工维护；控制面写入同目录派生 sidecar `config.override.json`，启动时按 base + override 合并，apply 顺序固定为先持久化，再热应用
+  - 可热应用字段固定为 `policy.mode`、`policy.random_subset_size`、`policy.stable_subset_size`、`pool.max_use`、`pool.blacklist_ttl`、`sources.enabled.*`
+  - 持久化但需重启生效的字段固定为 `server.*`、`validator.*`、`health.*`、`log.*`、`pool.min_ready`、`pool.max_ready`、`pool.buffer_max`、`pool.state_file`
+  - 请求期路由策略只支持 4 种模式：`balanced`、`random_subset`、`stable_subset`、`single_best`
+  - `control_plane.trusted_local_only=true` 为默认安全模式；设为 `false` 时允许可信局域网客户端写入控制面，但仍要求 `X-RandProxy-Control: 1` 并拒绝跨站浏览器信号
+  - `ManualRelease` / `ManualRevalidate` 保持 pool 容量不变量；ready/buffer 满时返回结构化 `409`（`ready_pool_full` / `buffer_pool_full`）
+  - 配置校验显式要求 `pool.max_ready > 0` 且 `pool.max_ready >= pool.min_ready`
+  - Web 交互状态保留：当前模块写入 `localStorage`，刷新后仍停留在上次模块；来源/代理池/事件/配置区域使用内部滚动和显示数量控制
+  - `/stats` 与 `/api/v1/overview` 提供有界运行窗口统计：`request_window_1m`、`request_window_5m`、`request_window_30m`、`request_window_24h`、`request_window_3d`，每个窗口包含请求数、成功数、失败数与平均延迟
+  - `/stats` 与 `/api/v1/overview` 提供 `active_connections` 与 `active_leases`；`/api/v1/pool` 的代理库存条目提供 `active_leases`，租约生命周期覆盖请求/relay 生命周期
+  - 最近请求记录保留旧 `time` 字段，并新增 RFC3339 `timestamp` 字段供前端按时间范围准确过滤
+  - 总览页移除旧就绪趋势图，改为真实运行指标卡；代理池改为紧凑代理卡片，并支持按代理 ID/IP/来源/协议/状态搜索与按就绪/待验证/冷却筛选，同时显示每个代理的活跃租约数；策略页加入模式说明；配置页加入“当前配置 / 配置差异 / 字段说明”参考切换；事件页聚焦回执、失败和最近请求
+  - Web 操作异常统一落到固定回执条；共享状态读取采用“最新刷新请求获胜”机制，避免定时刷新与操作后刷新乱序覆盖状态
+  - 前端交付 workflow 固定为 `npm --prefix ui run build` 之后 `cp ui/dist/index.html internal/server/dashboard.html`；`build-dashboard.sh` 是同一 workflow 的仓库包装脚本
+- **v9 Phase-1 allocator seam cleanup**:
+  - 请求期上游获取统一经 `internal/allocation`；`SOCKS5 CONNECT`、`HTTP CONNECT`、`HTTP forward`、`UDP ASSOCIATE` 不再直接依赖 `Pool.Next()`
+  - `Pool.Next()` 已删除；`internal/pool` 保留 `AcquireEntry()` / `AcquireEntryMatching()` 作为 allocator 所用最小 seam
+  - pool 继续拥有最终生命周期/记账变更：`UseCount`、`LastUsed`、quota 耗尽后的 blacklist/cooldown 转移，以及成功延迟/失败记录
+  - phase 1 只新增 keyed active-lease isolation：非空 `IsolationKey` 阻止跨 key 共享活跃 upstream，同 key 可并发复用，空 key 保持共享语义
+  - allocator seam 保持最小化；validator 继续只做准入闸门，不承载分配策略
+- **v8 Web/Proxy 端口拆分 + UDP ASSOCIATE**:
+  - 代理监听端口与 Web 控制面板端口拆分，`server.web_host` / `server.web_port` 独立提供 `/`、`/dashboard`、`/stats`
+  - 代理端口不再复用 Dashboard 路由，只承载 HTTP 代理与 SOCKS5
+  - SOCKS5 新增 `UDP ASSOCIATE`，生命周期绑定控制 TCP 连接
+  - 明确限制：`BIND` 继续不支持，`FRAG != 0` 直接丢弃，验证器暂不做 UDP 探测
+- **v7 优化审计（14 项修复）**:
+  - P0: HealthCheck 锁修复、Next() 评分接入、非 SOCKS5 代理 Forget
+  - P1: Validator channel 通知、releaseExpired 独立 ticker、swap-remove、sync.Pool、重启验证
+  - P2: HTTP 正向代理、SOCKS5 认证、验证深度、源多样性、CORS
+  - 通用: 验证目标多样化（多目标随机选择，不再硬编码 literouter）
+- **三轮深度审计 + 14 项修复**: SOCKS5 字节错位 / variance / load 锁 / SkipCheck 挂起 / nil panic / DialContext / lastChecked 竞态 / Promote 防重 / JSON 注释破坏 / ParseDuration 警告 / 流式延迟 / 拨号超时 / 黑名单持久化
+
+## Architecture
+- **9 providers**, all SOCKS5 via `Provider` interface with thread-safe `Status()`
+- **Flow**: downstream request → allocator lease acquisition → SOCKS5 upstream → target
+- **Allocator boundary**: request-time upstream selection lives in `internal/allocation`; live request handlers acquire via `Allocator.Acquire(ctx, AcquireRequest)`
+- **Pool ownership**: pool owns ready/buffer/blacklist inventory plus final `UseCount` / `LastUsed` / quota-blacklist-cooldown / latency / failure mutation; allocator only coordinates request-time choice and active leases
+- **Failure lifecycle**: request-time failures are recorded through `Lease.Finish(false)` into pool failure state; recently failed candidates are penalized in request ordering, repeated failures trigger blacklist, and blacklisted IP:port entries stay known until release/drop policy removes them
+- **Ready reservoir**: validator workers continue validating while ready count is below `pool.max_ready`; `pool.min_ready` remains the low-water health/refill threshold, not the validator stop line
+- **Phase-1 isolation only**: `IsolationKey` adds in-memory single-process cross-key active-lease isolation only; no account objects, sticky history, writable policy API, or persistent lease state
+- **监听拆分**: 代理流量走 `server.port`，操作台与 `/stats` 走 `server.web_port`
+- **控制面**: Web 操作台保留 `/`、`/dashboard`、`/stats`，并提供 `/api/v1/*` 控制接口；`control_plane.trusted_local_only=true` 时，变更请求只接受 loopback 客户端
+- **控制面约束**: `trusted_local_only=true` 要求 loopback RemoteAddr 且 Host 为 localhost/loopback IP；`trusted_local_only=false` 允许可信局域网客户端提交写操作但要求 IP 字面量 Host。所有 mutation 模式仍要求 `X-RandProxy-Control: 1` 并拒绝跨站浏览器信号，以降低 DNS rebinding 风险
+- **配置持久化**: 人工维护 `config.jsonc`，机器维护同目录 `config.override.json`；启动时合并，写入时只落 sidecar，顺序固定为先持久化，再热应用
+- **热应用边界**: `policy.*`、`pool.max_use`、`pool.blacklist_ttl`、`sources.enabled.*` 立即生效；`server.*`、`validator.*`、`health.*`、`log.*`、`pool.min_ready`、`pool.max_ready`、`pool.buffer_max`、`pool.state_file` 仅持久化并回报 restart required
+- **容量不变量**: 配置要求 `pool.max_ready > 0` 且 `pool.max_ready >= pool.min_ready`；手工 pool action 不会绕过 `maxReady` / `bufferMax` 上限
+- **Validator**: 准入闸门；只负责把 candidate 验证后送入 ready pool，不参与请求期分配策略
+- **兼容语义**: 旧配置未声明 `server.web_port` 时保持关闭；声明 `server.web_host` 时按配置绑定
+- **路由策略**: 仅支持 `balanced`、`random_subset`、`stable_subset`、`single_best`，其中 subset size 必须为正整数
+- **Operations Console**: Vue 3 + Vite + TypeScript + Chart.js 独立项目，vite-plugin-singlefile 打包为单 HTML，`//go:embed` 嵌入；中文浅色分层布局覆盖总览 / 代理池 / 来源 / 策略 / 配置 / 事件，零 CDN 依赖；顶部单行工具条提供刷新、时间范围与回执摘要；总览使用后端 30m/24h/3d 窗口统计；代理池支持本地搜索/筛选并展示 `active_leases`；配置页提供草稿与当前配置的逐行差异参考；用户触发的异步失败统一写入回执条，共享读取按最新请求回写
+- **前端交付**: 规范 workflow 是 `npm --prefix ui run build` 后复制 `ui/dist/index.html` 到 `internal/server/dashboard.html`；仓库脚本 `build-dashboard.sh` 执行同一流程
+- **/stats 兼容性**: 继续保留 machine-readable 顶层字段 `pool`、`server`、`sources`、`ready_history`、`recent_requests`
+- **Ready-entry 选择原语**: allocator 默认策略复用 pool 的 bestProxy 优先 → 按源轮询 + 源内 Score() 加权选择 → fallback 首个 ready；请求期入口不再暴露 `Pool.Next()`
+- **Pool 通知**: `notifyCh` 缓冲 channel，Feed/Promote 后发信号，Validator worker 用 select 等待
+- **Pool 清理**: 独立 ticker 每 30s 调用 `ReleaseExpired()`，blacklistEntry 用 swap-remove O(1)
+- **Health**: EWMA scoring + consecutive fail eviction + bestProxy + dynamic check interval + 无锁 revalidation
+- **Protocol detection**: TCP 首个字节 0x05 → SOCKS5, 其余 → HTTP
+- **HTTP 正向代理**: GET/POST/PUT/DELETE 等方法通过 SOCKS5 上游转发
+- **SOCKS5 认证**: 支持 no-auth (0x00) 和 username/password (0x02) 协商
+- **SOCKS5 UDP**: 支持 `UDP ASSOCIATE`，本地 UDP relay ↔ 上游 SOCKS5 UDP association；固定首个客户端 `IP:port`；不支持 `BIND`，丢弃分片 UDP
+- **验证深度**: 解析 HTTP 状态码，2xx/3xx 通过，4xx/5xx 拒绝
+- **验证目标**: 多目标随机选择（默认 literouter + httpbin + example），不再硬编码
+- **SSRF 防护**: Feed / validator / load 三层过滤私有 IP（IsPrivate / IsLoopback / IsLinkLocal / IsUnspecified）
+- **延迟测量**: 仅连接建立时间，流式请求不污染 EWMA
+- **持久化**: pool_state.json 同时记录 ready + blacklist 状态，重启后过期条目放入 buffer 重新验证
+- **Relay**: sync.Pool 复用 32KB buffer，200 并发共享池
+- **非 SOCKS5 处理**: `Pool.Forget()` 清理 known map，允许后续重新抓取
+
+## Blocked / 放弃
+- HTML 网页爬虫源（free-proxy-list.net / 89ip / ihuan 等）：实测质量差 / 数据固定 / 403，投入产出比低，已放弃
